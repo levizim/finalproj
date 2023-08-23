@@ -2,10 +2,19 @@ const { createUser, loginUser, getUserById, updateUser, deleteUser } = require('
 var express = require('express');
 var router = express.Router();
 
+
+function isAuthenticated(req, res, next) {
+    if (req.session && req.session.user) {
+        return next();
+    } else {
+        return res.status(401).json({ error: "You are not authenticated" });
+    }
+}
+
 // Register user
 router.post('/register', async (req, res) => {
     try {
-        const { userName, email, password, address} = req.body;
+        const { userName, email, password, address } = req.body;
         await createUser(userName, email, password, address);
         res.json({ message: "User registered successfully" });
     } catch (err) {
@@ -18,9 +27,17 @@ router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         const user = await loginUser(email, password);
-        if(user) {
-            // For security, we can omit the password from the response
-            delete user.Password;
+        if (user) {
+            // Save user data in session
+            req.session.user = {
+                userName: user.userName,
+                email: user.email,
+                userId: user.UserID,
+                address: user.address
+            };
+
+            // For security, omit the password from the response
+            delete user.password;
             res.json(user);
         } else {
             res.status(401).json({ error: "Invalid email or password" });
@@ -31,11 +48,11 @@ router.post('/login', async (req, res) => {
 });
 
 // Get user details
-router.get('/:userId', async (req, res) => {
+router.get('/:userId', isAuthenticated, async (req, res) => {
     try {
         const user = await getUserById(req.params.userId);
-        if(user) {
-            delete user.Password; // Omit password from response
+        if (user) {
+            delete user.password; // Omit password from response
             res.json(user);
         } else {
             res.status(404).json({ error: "User not found" });
@@ -46,7 +63,7 @@ router.get('/:userId', async (req, res) => {
 });
 
 // Update user
-router.put('/:userId', async (req, res) => {
+router.put('/:userId', isAuthenticated, async (req, res) => {
     try {
         const userId = req.params.userId;
         const userData = req.body;
@@ -57,6 +74,11 @@ router.put('/:userId', async (req, res) => {
     }
 });
 
+router.post('/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ message: "Logged out successfully" });
+});
+
 // Delete user
 router.delete('/:userId', async (req, res) => {
     try {
@@ -65,12 +87,6 @@ router.delete('/:userId', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
-});
-
-router.get('/is-authenticated', function(req, res) {
-  // Placeholder logic. Normally, you'd check the request headers or session for a valid token.
-  const isAuthenticated = false; // placeholder; replace with actual authentication logic.
-  res.json({ isAuthenticated: isAuthenticated });
 });
 
 module.exports = router;
