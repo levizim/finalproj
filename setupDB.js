@@ -9,7 +9,9 @@ async function setupDatabase() {
                 UserName VARCHAR(255) NOT NULL,
                 Email VARCHAR(255) NOT NULL UNIQUE,
                 Password VARCHAR(255) NOT NULL,
-                Address VARCHAR(255)
+                Address VARCHAR(255),
+                resetToken VARCHAR(255),
+                resetTokenExpires DATETIME
             );
         `);
 

@@ -1,5 +1,6 @@
 const db = require('../db/config');
-//const bcrypt = require('bcrypt');  // Make sure you've installed bcrypt: `npm install bcrypt`
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 
 module.exports = {
     // Create a user
@@ -21,14 +22,41 @@ module.exports = {
         const query = 'SELECT * FROM Users WHERE Email = ? AND Password = ?';
         const [rows] = await db.query(query, [email, password]);
         return rows[0];
-    }
-    ,
-
+    },
+    getUserByEmail: async (email) => {
+        const query = 'SELECT * FROM Users WHERE Email = ?';
+        const [rows] = await db.query(query, [email]);
+        return rows[0];
+    },
+// Reset password
     // Update a user by ID
     updateUser: async (userId, data) => {
         const query = 'UPDATE Users SET ? WHERE UserID = ?';
         await db.query(query, [data, userId]);
     },
+    // store reset token from a user
+    setResetToken: async (email) => {
+        const resetToken = crypto.randomBytes(20).toString('hex');
+        const resetTokenExpires = new Date(Date.now() + 3600000); // Token expires in 1 hour
+    
+        const query = 'UPDATE Users SET resetToken = ?, resetTokenExpires = ? WHERE Email = ?';
+        await db.query(query, [resetToken, resetTokenExpires, email]);
+        return resetToken;
+    },
+    // Reset user password
+resetPassword: async (token, newPassword) => {
+    console.log("Received newPassword:", newPassword);
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+    const query = 'UPDATE Users SET Password = ?, resetToken = NULL, resetTokenExpires = NULL WHERE resetToken = ?';
+    await db.query(query, [hashedPassword, token]);
+},
+    // Fetch a user by reset token
+getUserByResetToken: async (token) => {
+    const query = 'SELECT * FROM Users WHERE resetToken = ? AND resetTokenExpires > NOW()';
+    const [rows] = await db.query(query, [token]);
+    return rows[0];
+},
+
 
     // Delete a user by ID
     deleteUser: async (userId) => {

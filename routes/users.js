@@ -1,7 +1,18 @@
-const { createUser, loginUser, getUserById, updateUser, deleteUser } = require('../dals/users');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+const bcrypt = require('bcrypt');
+
+const { createUser, loginUser, getUserById, updateUser, deleteUser, getUserByEmail, setResetToken, getUserByResetToken, resetPassword } = require('../dals/users');
 var express = require('express');
 var router = express.Router();
-
+const transporter = nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    auth: {
+        user: 'nico.hegmann@ethereal.email',
+        pass: '3V23KhtBHvqSDE5S5q'
+    }
+});
 
 function isAuthenticated(req, res, next) {
     if (req.session && req.session.user) {
@@ -73,6 +84,55 @@ router.put('/:userId', isAuthenticated, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+// Request password reset
+router.post('/request-reset', async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await getUserByEmail(email);
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const token = await setResetToken(email);
+        const mailOptions = {
+            from: 'no-reply@yourapp.com',
+            to: email,
+            subject: 'Password Reset',
+            text: `You are receiving this because you (or someone else) requested a password reset for your account.
+                    Please click on the following link, or paste it into your browser to complete the process:
+                    http://localhost:3001/reset/${token}
+                    If you did not request this, please ignore this email and your password will remain unchanged.`
+        };
+
+        transporter.sendMail(mailOptions, (error, response) => {
+            if (error) {
+                console.error('Email error:', error);
+                return res.status(500).json({ error: 'Email sending failed' });
+            }
+            res.json({ message: "Password reset link sent successfully" });
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Reset password
+router.post('/reset/:token', async (req, res) => {
+    try {
+        const { password } = req.body;
+        const token = req.params.token;
+        const user = await getUserByResetToken(token);
+        if (!user) {
+            return res.status(400).json({ error: "Reset token is invalid or has expired" });
+        }
+
+        await resetPassword(token, password);
+        res.json({ message: "Password reset successfully" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 router.post('/logout', (req, res) => {
     req.session.destroy();
