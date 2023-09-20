@@ -20,5 +20,11 @@ module.exports = {
     deleteOrderDetail: async (orderId, productId) => {
         const query = 'DELETE FROM Order_Details WHERE OrderID = ? AND ProductID = ?';
         await db.query(query, [orderId, productId]);
+    },
+    getAllOrderDetailsForOrder: async (orderId) => {
+        const query = 'SELECT * FROM Order_Details WHERE OrderID = ?';
+        const [rows] = await db.query(query, [orderId]);
+        return rows;
     }
+    
 };

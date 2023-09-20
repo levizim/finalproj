@@ -1,16 +1,27 @@
 const db = require('../db/config');
 
 module.exports = {
-    createProduct: async (productName, description, price) => {
-        const query = 'INSERT INTO Products (ProductName, Description, Price) VALUES (?, ?, ?)';
-        await db.query(query, [productName, description, price]);
+    getAllProducts: async () => {
+        const [results] = await db.query('SELECT * FROM Products');
+        return results;
+    },
+    
+
+    getProductById: async (id) => {
+        const [results] = await db.query('SELECT * FROM Products WHERE ProductID = ?', [id]);
+        return results[0]; // return the first product or undefined if no results
+    },
+    
+
+    addProduct: async (product) => {
+        return await db.query('INSERT INTO Products SET ?', product);
     },
 
-    getProductById: async (productId) => {
-        const query = 'SELECT * FROM Products WHERE ProductID = ?';
-        const [rows] = await db.query(query, [productId]);
-        return rows[0];
+    updateProduct: async (id, product) => {
+        return await db.query('UPDATE Products SET ? WHERE ProductID = ?', [product, id]);
     },
 
-    // ... Add update and delete functions and any other necessary functions
+    deleteProduct: async (id) => {
+        return await db.query('DELETE FROM Products WHERE ProductID = ?', [id]);
+    }
 };

@@ -1,10 +1,13 @@
 const nodemailer = require('nodemailer');
-const crypto = require('crypto');
 const bcrypt = require('bcrypt');
-
-const { createUser, loginUser, getUserById, updateUser, deleteUser, getUserByEmail, setResetToken, getUserByResetToken, resetPassword } = require('../dals/users');
+const jwt = require('jsonwebtoken');
+const {
+    createUser, loginUser, getUserById, updateUser, deleteUser, getUserByEmail, resetPassword
+} = require('../dals/users');
 var express = require('express');
 var router = express.Router();
+
+const JWT_SECRET = 'YOUR_SECRET_KEY';  // Better stored in environment variables
 const transporter = nodemailer.createTransport({
     host: 'smtp.ethereal.email',
     port: 587,
@@ -13,14 +16,23 @@ const transporter = nodemailer.createTransport({
         pass: '3V23KhtBHvqSDE5S5q'
     }
 });
-
 function isAuthenticated(req, res, next) {
-    if (req.session && req.session.user) {
-        return next();
-    } else {
-        return res.status(401).json({ error: "You are not authenticated" });
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+        return res.status(401).json({ error: "No token provided" });
     }
+
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(401).json({ error: "Invalid token" });
+        }
+
+        req.user = decoded;
+        next();
+    });
 }
+
+
 
 // Register user
 router.post('/register', async (req, res) => {
@@ -39,17 +51,9 @@ router.post('/login', async (req, res) => {
         const { email, password } = req.body;
         const user = await loginUser(email, password);
         if (user) {
-            // Save user data in session
-            req.session.user = {
-                userName: user.userName,
-                email: user.email,
-                userId: user.UserID,
-                address: user.address
-            };
-
-            // For security, omit the password from the response
+            const token = jwt.sign({ userId: user.UserID }, JWT_SECRET, { expiresIn: '1h' });
             delete user.password;
-            res.json(user);
+            res.json({ token, user });
         } else {
             res.status(401).json({ error: "Invalid email or password" });
         }
@@ -93,7 +97,7 @@ router.post('/request-reset', async (req, res) => {
             return res.status(404).json({ error: "User not found" });
         }
 
-        const token = await setResetToken(email);
+        const token = jwt.sign({ userId: user.UserID, purpose: 'passwordReset' }, JWT_SECRET, { expiresIn: '1h' });
         const mailOptions = {
             from: 'no-reply@yourapp.com',
             to: email,
@@ -116,21 +120,21 @@ router.post('/request-reset', async (req, res) => {
     }
 });
 
-// Reset password
-router.post('/reset/:token', async (req, res) => {
-    try {
-        const { password } = req.body;
-        const token = req.params.token;
-        const user = await getUserByResetToken(token);
-        if (!user) {
-            return res.status(400).json({ error: "Reset token is invalid or has expired" });
+router.post('/reset', async (req, res) => {
+    const { token, password } = req.body;
+
+    jwt.verify(token, JWT_SECRET, async (err, decoded) => {
+        if (err || decoded.purpose !== 'passwordReset') {
+            return res.status(400).json({ error: "Token is invalid or has expired" });
         }
 
-        await resetPassword(token, password);
-        res.json({ message: "Password reset successfully" });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+        try {
+            await resetPassword(decoded.userId, password);
+            res.json({ message: "Password reset successfully" });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
 });
 
 
