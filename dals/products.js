@@ -23,5 +23,18 @@ module.exports = {
 
     deleteProduct: async (id) => {
         return await db.query('DELETE FROM Products WHERE ProductID = ?', [id]);
+    },
+    getBestSellingProducts: async () => {
+        const query = `
+            SELECT p.ProductID, p.ProductName, SUM(od.Quantity) AS TotalOrderedQuantity
+            FROM Products p
+            JOIN Order_Details od ON p.ProductID = od.ProductID
+            GROUP BY p.ProductID, p.ProductName
+            ORDER BY TotalOrderedQuantity DESC;
+        `;
+    
+        const [rows] = await db.query(query);
+        return rows;
     }
+    
 };
